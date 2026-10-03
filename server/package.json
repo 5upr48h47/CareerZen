@@ -1,0 +1,47 @@
+{
+  "name": "careerzen-server",
+  "version": "1.0.0",
+  "description": "CareerZen Backend Server",
+  "main": "src/index.js",
+  "type": "module",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js",
+    "test": "node tests/api-flow.test.js",
+    "lint": "eslint src/",
+    "db:generate": "prisma generate",
+    "db:push": "prisma db push",
+    "db:studio": "prisma studio",
+    "db:postgres:generate": "node scripts/use-postgres.mjs && prisma generate --schema prisma/schema.postgres.prisma",
+    "db:postgres:push": "prisma db push --schema prisma/schema.postgres.prisma",
+    "demo:remove": "node scripts/remove-demo-users.mjs",
+    "demo:wipe": "node scripts/remove-demo-data.mjs",
+    "db:wipe-nonadmin": "node scripts/wipe-nonadmin.mjs"
+  },
+  "dependencies": {
+    "@google/genai": "^2.21.0",
+    "@prisma/client": "^5.15.0",
+    "@sentry/node": "^8.10.0",
+    "bcryptjs": "^2.4.3",
+    "cloudinary": "^1.41.3",
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.5",
+    "express": "^4.21.2",
+    "express-rate-limit": "^7.4.0",
+    "helmet": "^7.1.0",
+    "jsonwebtoken": "^9.0.2",
+    "multer": "^2.4.0",
+    "multer-storage-cloudinary": "^4.0.0",
+    "pino": "^9.3.0",
+    "pino-pretty": "^11.2.0",
+    "razorpay": "^2.9.8",
+    "sqlite3": "^6.0.1",
+    "twilio": "^6.1.1",
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^6.1.1",
+    "eslint": "^9.7.0",
+    "prisma": "^5.15.0"
+  }
+}

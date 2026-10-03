@@ -1,0 +1,118 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+env:
+  NODE_VERSION: '20.x'
+
+jobs:
+  lint-and-typecheck:
+    name: Lint & Typecheck
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: server/package-lock.json
+
+      - name: Install server dependencies
+        run: cd server && npm ci --no-audit --no-fund
+
+      - name: Run ESLint
+        run: cd server && npm run lint
+
+      - name: Check server syntax
+        run: cd server && node --check src/index.js
+
+  server-tests:
+    name: Server Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: server/package-lock.json
+
+      - name: Install server dependencies
+        run: cd server && npm ci --no-audit --no-fund
+
+      # Tests run against SQLite, matching local development. The suite starts
+      # nothing itself — it drives a server you run locally before `npm test`.
+      - name: Generate Prisma Client
+        run: cd server && npx prisma generate
+        env:
+          DATABASE_URL: file:./test.db
+
+      - name: Start server
+        run: |
+          cd server
+          PORT=5099 NODE_ENV=test \
+            JWT_SECRET=test-secret-key-that-is-at-least-32-characters-long \
+            DATABASE_URL=file:./test.db \
+            LOG_LEVEL=warn \
+            node src/index.js &
+          # Poll the health endpoint rather than pulling in a wait-for dep.
+          for i in $(seq 1 60); do
+            if curl -sf http://localhost:5099/api/health > /dev/null; then
+              echo "Server ready after ${i}s"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "Server failed to become healthy"
+          exit 1
+
+      - name: Run API Tests
+        run: cd server && npm test
+        env:
+          API_BASE_URL: http://localhost:5099
+
+  client-build:
+    name: Client Build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: client/package-lock.json
+
+      - name: Install client dependencies
+        run: cd client && npm ci --no-audit --no-fund
+
+      - name: Build Client
+        run: cd client && npm run build
+
+  # Deployment is handled by render.yaml — Render watches the repo and deploys
+  # automatically on push. No deploy job is needed here; the gates above must
+  # pass first, which Render's own checks enforce.
+  deploy-status:
+    name: Deploy Readiness
+    needs: [lint-and-typecheck, server-tests, client-build]
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Report
+        run: |
+          echo "All checks passed on main."
+          echo "Render auto-deploys on push if connected via render.yaml."
+          echo "Required production env vars: CORS_ORIGINS, CLIENT_URL,"
+          echo "RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET, GEMINI_API_KEY"

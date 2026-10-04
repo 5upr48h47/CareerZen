@@ -32,7 +32,12 @@ services:
     # `npm ci` (not `npm install`): the free-tier build has a tight timeout and
     # `npm install` without a lock file takes ~60s building the dependency tree
     # from scratch. `npm ci` reads the committed lock and installs in ~22s.
-    buildCommand: npm ci
+    #
+    # `--ignore-scripts` is required: @prisma/client ships a `postinstall` script
+    # that downloads the query engine binary, and that download fails on Render's
+    # build container. Skipping it is safe because `npm run build` runs
+    # `prisma generate`, which downloads the engine itself.
+    buildCommand: npm ci --ignore-scripts && npm run build
     startCommand: npm start
     healthCheckPath: /api/health
     # Free-tier services sleep after inactivity and are capped at 512 MB RAM.

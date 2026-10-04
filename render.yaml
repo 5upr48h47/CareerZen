@@ -14,7 +14,7 @@ services:
     runtime: node
     plan: free
     region: singapore
-    buildCommand: npm install && npm --prefix client install && npm --prefix client run build
+    buildCommand: npm install && npm --prefix client install && npm --prefix client run build && npm --prefix server run db:generate
     startCommand: node server/src/index.js
     healthCheckPath: /api/health
     # Free-tier services sleep after inactivity and are capped at 512 MB RAM.

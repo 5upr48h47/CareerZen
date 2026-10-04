@@ -7,14 +7,20 @@
 //
 // DATABASE_URL is normally provided by the hosting platform (Render wires
 // it from the attached database). If it is missing or points at a
-// non-PostgreSQL URL (e.g. the local SQLite dev value), substitute a
-// placeholder so `db push` can at least validate the schema without
-// crashing the deploy. The real URL is always set in production.
+// non-PostgreSQL URL (e.g. the local SQLite dev value), fail fast with a
+// clear message instead of attempting a push against a placeholder
+// localhost URL — a failed push against localhost just buries the real
+// problem (no database attached) under a misleading connection error.
 import { spawnSync } from 'node:child_process';
 
 const env = { ...process.env };
 if (!/^postgres(ql)?:\/\/.+/.test(env.DATABASE_URL || '')) {
-  env.DATABASE_URL = 'postgresql://build@localhost:5432/build';
+  console.error(
+    '\n❌ DATABASE_URL is missing or not a PostgreSQL URL. Render wires it ' +
+    'from the attached database — attach the careerzen-db database to this ' +
+    'service and ensure DATABASE_URL is set as an env var.'
+  );
+  process.exit(1);
 }
 
 function run(label, cmd, args) {

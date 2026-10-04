@@ -13,7 +13,7 @@ const connectedClients = new Map(); // userId -> Set of WebSocket instances
 export function initSocketServer(server) {
   const wss = new WebSocketServer({ server, path: '/ws' });
 
-  wss.on('connection', (ws, req) => {
+  wss.on('connection', (ws, _req) => {
     let currentUserId = null;
 
     // Handle authentication message or query param
@@ -29,7 +29,7 @@ export function initSocketServer(server) {
             }
             connectedClients.get(currentUserId).add(ws);
             ws.send(JSON.stringify({ type: 'authenticated', userId: currentUserId }));
-          } catch (err) {
+          } catch (_err) {
             ws.send(JSON.stringify({ type: 'error', message: 'Auth failed' }));
           }
         }

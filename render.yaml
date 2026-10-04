@@ -29,15 +29,15 @@ services:
     # shell) so the DATABASE_URL env var works on both Linux and Windows build
     # containers.
     #
-    # `npm ci` (not `npm install`): the free-tier build has a tight timeout and
-    # `npm install` without a lock file takes ~60s building the dependency tree
-    # from scratch. `npm ci` reads the committed lock and installs in ~22s.
+    # NOTE: the Render dashboard's buildCommand overrides this file. The dashboard
+# is set to `npm install && npm run build` and cannot be changed via the API
+# (the provided key is read-only on this service), so the repo is configured to
+# make `npm install` itself safe: a root `.npmrc` sets ignore-scripts=true.
     #
-    # `--ignore-scripts` is required: @prisma/client ships a `postinstall` script
-    # that downloads the query engine binary, and that download fails on Render's
-    # build container. Skipping it is safe because `npm run build` runs
-    # `prisma generate`, which downloads the engine itself.
-    buildCommand: npm ci --ignore-scripts && npm run build
+    # `npm install` (not `npm ci`): the free-tier build has a tight timeout and
+    # `npm install` without a lock file takes ~60s building the dependency tree
+    # from scratch. The committed root package-lock.json keeps it well under.
+    buildCommand: npm install && npm run build
     startCommand: npm start
     healthCheckPath: /api/health
     # Free-tier services sleep after inactivity and are capped at 512 MB RAM.

@@ -39,3 +39,5 @@ Thumbs.db
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+# Generated at build time by server/scripts/use-postgres.mjs from schema.prisma
+server/prisma/schema.postgres.prisma

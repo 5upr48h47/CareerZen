@@ -14,8 +14,17 @@ services:
     runtime: node
     plan: free
     region: singapore
-    buildCommand: npm install && npm --prefix client install && npm --prefix client run build && npm --prefix server run db:generate
-    startCommand: node server/src/index.js
+    # The app is authored against SQLite (schema.prisma) but Render provisions
+    # PostgreSQL. At build time we derive the postgres variant of the schema,
+    # generate a PostgreSQL Prisma Client, and at start time push the schema so
+    # the empty provisioned database gets its tables. Without the postgres
+    # switch the server starts with a SQLite engine against a Postgres URL and
+    # every query fails; without db push the database has no tables at all.
+    # DATABASE_URL is only resolved at runtime (fromDatabase above), so the build
+    # step needs a placeholder or `prisma generate` fails URL validation. The
+    # value is discarded — the generated client is provider-bound, not URL-bound.
+    buildCommand: DATABASE_URL="postgresql://build@localhost:5432/build" npm install && npm --prefix client install && npm --prefix client run build && DATABASE_URL="postgresql://build@localhost:5432/build" npm --prefix server run db:postgres:generate
+    startCommand: npm --prefix server run db:postgres:push && node server/src/index.js
     healthCheckPath: /api/health
     # Free-tier services sleep after inactivity and are capped at 512 MB RAM.
     autoDeploy: true

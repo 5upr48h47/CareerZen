@@ -14,22 +14,22 @@ services:
     runtime: node
     plan: free
     region: singapore
-    # The app is authored against SQLite (schema.prisma) but Render provisions
-    # PostgreSQL. At build time we derive the postgres variant of the schema,
-    # generate a PostgreSQL Prisma Client, and at start time push the schema so
-    # the empty provisioned database gets its tables. Without the postgres
-    # switch the server starts with a SQLite engine against a Postgres URL and
-    # every query fails; without db push the database has no tables at all.
-    # DATABASE_URL is only resolved at runtime (fromDatabase above), so the build
-    # step needs a placeholder or `prisma generate` fails URL validation. The
-    # value is discarded — the generated client is provider-bound, not URL-bound.
-    # The repo has no root package.json dependencies, so the leading
-    # `npm install` installs nothing and the subsequent `--prefix server`
-    # install has no node_modules to link against. Drop it and install each
-    # package directly. (The CI workflow uses `npm ci` because it has a
-    # package-lock.json; Render's build container does not.)
-    buildCommand: DATABASE_URL="postgresql://build@localhost:5432/build" npm install --prefix server && npm install --prefix client && npm --prefix client run build && DATABASE_URL="postgresql://build@localhost:5432/build" npm --prefix server run db:postgres:generate
-    startCommand: npm --prefix server run db:postgres:push && node server/src/index.js
+    # The app is authored against SQLite (server/prisma/schema.prisma) but
+    # Render provisions PostgreSQL. scripts/build.mjs derives the postgres
+    # variant of the schema and generates a PostgreSQL Prisma Client, and
+    # scripts/start.mjs pushes the schema to the database before starting.
+    # Without the postgres switch the server starts with a SQLite engine
+    # against a Postgres URL and every query fails; without db push the
+    # database has no tables at all.
+    #
+    # package.json declares server and client as npm workspaces, so a single
+    # `npm install` installs both. The build and start scripts live at the
+    # root, so whatever buildCommand Render runs — `npm install && npm run
+    # build`, `yarn install && yarn build`, or anything else — resolves to
+    # the same steps. The scripts are Node files (not inline shell) so the
+    # DATABASE_URL env var works on both Linux and Windows build containers.
+    buildCommand: npm install && npm run build
+    startCommand: npm start
     healthCheckPath: /api/health
     # Free-tier services sleep after inactivity and are capped at 512 MB RAM.
     autoDeploy: true

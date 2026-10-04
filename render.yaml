@@ -23,12 +23,16 @@ services:
     # database has no tables at all.
     #
     # package.json declares server and client as npm workspaces, so a single
-    # `npm install` installs both. The build and start scripts live at the
-    # root, so whatever buildCommand Render runs — `npm install && npm run
-    # build`, `yarn install && yarn build`, or anything else — resolves to
-    # the same steps. The scripts are Node files (not inline shell) so the
-    # DATABASE_URL env var works on both Linux and Windows build containers.
-    buildCommand: npm install && npm run build
+    # `npm ci` installs both from the committed root package-lock.json. The
+    # build and start scripts live at the root, so whatever buildCommand Render
+    # runs resolves to the same steps. The scripts are Node files (not inline
+    # shell) so the DATABASE_URL env var works on both Linux and Windows build
+    # containers.
+    #
+    # `npm ci` (not `npm install`): the free-tier build has a tight timeout and
+    # `npm install` without a lock file takes ~60s building the dependency tree
+    # from scratch. `npm ci` reads the committed lock and installs in ~22s.
+    buildCommand: npm ci && npm run build
     startCommand: npm start
     healthCheckPath: /api/health
     # Free-tier services sleep after inactivity and are capped at 512 MB RAM.

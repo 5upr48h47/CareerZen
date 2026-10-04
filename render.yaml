@@ -32,7 +32,7 @@ services:
     # `npm ci` (not `npm install`): the free-tier build has a tight timeout and
     # `npm install` without a lock file takes ~60s building the dependency tree
     # from scratch. `npm ci` reads the committed lock and installs in ~22s.
-    buildCommand: npm ci && npm run build
+    buildCommand: npm ci
     startCommand: npm start
     healthCheckPath: /api/health
     # Free-tier services sleep after inactivity and are capped at 512 MB RAM.

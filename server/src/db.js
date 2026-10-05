@@ -1,4 +1,6 @@
-import { PrismaClient } from '@prisma/client';
+import prismaClientPkg from '@prisma/client';
+
+const { PrismaClient } = prismaClientPkg;
 import bcrypt from 'bcryptjs';
 import { logger } from './logger.js';
 

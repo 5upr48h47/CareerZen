@@ -1,10 +1,17 @@
-import express from 'express';
+// Must be first: loads .env before socket.js (and anything else) reads
+// process.env at module scope. See loadEnv.js for why this cannot live here.
+import './loadEnv.js';
+
 import path from 'path';
 import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+import express from 'express';
 import fs from 'fs';
 import cors from 'cors';
 import http from 'http';
-import dotenv from 'dotenv';
 import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import * as Sentry from '@sentry/node';
@@ -30,8 +37,6 @@ import adminRoutes from './routes/adminRoutes.js';
 import premiumRoutes from './routes/premiumRoutes.js';
 import paymentOptionsRoutes from './routes/paymentOptionsRoutes.js';
 import analyticsRoutes from './routes/analyticsRoutes.js';
-
-dotenv.config();
 
 // Sentry initialization
 if (process.env.SENTRY_DSN) {
@@ -111,8 +116,6 @@ app.use(express.json());
 // __dirname is server/src, but multer writes to server/public/uploads (see
 // services/upload.js) — so walk up one level. Mismatching these two made every
 // stored /uploads/... URL fall through to the SPA catch-all and return index.html.
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 const UPLOADS_DIR = path.join(__dirname, '../public/uploads');
 app.use('/uploads', express.static(UPLOADS_DIR));
 

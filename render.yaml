@@ -5,7 +5,7 @@ services:
     name: careerzen
     runtime: node
     plan: free
-    region: singapore
+    region: oregon
     buildCommand: npm ci --include=dev && npm run build
     startCommand: npm start
     healthCheckPath: /api/health
@@ -16,7 +16,9 @@ services:
       - key: NODE_VERSION
         value: '20'
       - key: DATABASE_URL
-        sync: false
+        fromDatabase:
+          name: careerzen-db
+          property: connectionString
       - key: JWT_SECRET
         generateValue: true
       - key: CORS_ORIGINS
@@ -35,5 +37,3 @@ services:
         sync: false
       - key: SEED_DEMO
         value: 'false'
-
-# PostgreSQL is external. DATABASE_URL is supplied in Render environment variables.

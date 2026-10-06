@@ -1,141 +1,77 @@
 # Deploying CareerZen
 
-This app deploys as **one Node service**. Render builds the React frontend and
-Express serves it from the same origin, so the SPA and API share a domain — no
-CORS configuration, no reverse proxy, one TLS certificate.
+CareerZen is deployed as one Node/Express service on Render. The React/Vite
+frontend is built first and then served by Express from the same origin.
 
----
+## 1. GitHub
 
-## 1. Prerequisites
+The production-ready repository is:
 
-| Thing | Why | Free? |
-|---|---|---|
-| GitHub account | Render deploys from your repo | ✅ |
-| Render account | Hosting + PostgreSQL | ✅ free tier |
-| Razorpay account | Live payments (`rzp_live_*` keys) | ✅ |
-| Google account | Gemini API key for real AI features | ✅ |
+- 5upr48h47/CareerZen
+- main branch
 
----
+Do not commit real `.env` files, SQLite databases, `node_modules`, build
+artifacts, or uploaded user files.
 
-## 2. Push the code
+## 2. PostgreSQL
 
-```bash
-cd careerconnect
-git add .
-git commit -m "CareerZen deployment prep"
-git branch -M main
-git remote add origin https://github.com/<you>/careerzen.git
-git push -u origin main
+Use an external PostgreSQL provider such as Neon so the database is independent
+of Render's expiring/free database offerings.
+
+Create a PostgreSQL database and copy its connection string. It becomes the
+Render `DATABASE_URL` value.
+
+## 3. Render
+
+1. Render dashboard → New → Blueprint.
+2. Select the GitHub repository `5upr48h47/CareerZen`.
+3. Render reads `render.yaml`.
+4. Set these environment variables when prompted:
+   - `DATABASE_URL` = external PostgreSQL connection string
+   - `CORS_ORIGINS` = your Render HTTPS URL
+   - `CLIENT_URL` = your Render HTTPS URL
+   - `RAZORPAY_KEY_ID` = optional
+   - `RAZORPAY_KEY_SECRET` = optional
+   - `GEMINI_API_KEY` = optional
+5. `JWT_SECRET` is generated automatically by Render.
+
+The service runs:
+
+```text
+npm ci
+npm run build
+npm start
 ```
 
-`.gitignore` already excludes `.env`, `*.db`, `node_modules`, and `dist`, so no
-secrets or database files get committed. Verify before pushing:
+At startup, the PostgreSQL schema is pushed automatically before Express starts.
 
-```bash
-git status --ignored | grep -E "\.env|\.db$"   # these must NOT appear as tracked
+## 4. Health check
+
+After deployment, open:
+
+```text
+https://YOUR-APP.onrender.com/api/health
 ```
 
----
+A healthy deployment returns JSON from the CareerZen backend.
 
-## 3. Create the database
+## 5. Important: uploads
 
-Two free options:
+Render's filesystem is ephemeral. Files stored under
+`server/src/public/uploads` should not be treated as permanent user storage.
 
-**Option A — Render PostgreSQL** (declared in `render.yaml`)
-Provisioned automatically when you connect the Blueprint. Note: Render's free
-Postgres **expires after 30 days**, so you must recreate it or migrate.
+For durable uploads, move avatars/resumes/media to a persistent object-storage
+provider such as Cloudinary or Cloudflare R2.
 
-**Option B — Neon** (recommended, no expiry)
-1. Sign up at https://neon.tech
-2. Create a project, copy the connection string
-3. Paste it into Render's `DATABASE_URL` env var
+## 6. Local verification
 
-Then create the tables:
+From the project root:
 
-```bash
-# From server/, with DATABASE_URL set to your Postgres string:
-npx prisma generate --schema prisma/schema.postgres.prisma
-npx prisma db push --schema prisma/schema.postgres.prisma
+```powershell
+npm install
+npm run verify:deployment
+npm run build
 ```
 
-> `schema.postgres.prisma` is generated from `schema.prisma` by
-> `node scripts/use-postgres.mjs`. Prisma requires the datasource provider to
-> be a literal, so the two dialects live in separate schema files.
-
----
-
-## 4. Deploy on Render
-
-1. Render dashboard → **New → Blueprint**
-2. Select your repo — it reads `render.yaml` automatically
-3. Fill in the `sync: false` env vars it asks for:
-
-| Variable | Value |
-|---|---|
-| `CORS_ORIGINS` | `https://your-app.onrender.com` |
-| `CLIENT_URL` | `https://your-app.onrender.com` |
-| `RAZORPAY_KEY_ID` | `rzp_live_...` |
-| `RAZORPAY_KEY_SECRET` | from Razorpay dashboard |
-| `GEMINI_API_KEY` | optional, enables real LLM inference |
-
-`JWT_SECRET` is generated automatically. `DATABASE_URL` is wired to the
-attached database.
-
----
-
-## 5. After first deploy
-
-```bash
-# Remove the demo accounts and all their seeded content (jobs, posts,
-# collaborations, profiles with demo projects). They all share the password
-# "password123" and one of them is a recruiter who can post jobs.
-node server/scripts/remove-demo-data.mjs --yes
-
-# Remove every remaining non-admin account and its data — keeps only your
-# real admin account(s). Run this after promoting yourself, so the public
-# database starts with nothing but genuine self-registered users.
-node server/scripts/promote-admin.mjs you@example.com
-node server/scripts/wipe-nonadmin.mjs --yes
-
-# Promote your real account to admin
-node server/scripts/promote-admin.mjs you@example.com
-```
-
-Then register your account through the UI, and run the promote command.
-
----
-
-## Free-tier limits to expect
-
-| Limitation | Impact | Workaround |
-|---|---|---|
-| Service sleeps after ~15 min idle | First request takes ~30s | Acceptable for a demo |
-| Free Postgres expires in 30 days (Render) | Database disappears | Use Neon instead |
-| 512 MB RAM | Fine for this app | — |
-| No persistent disk | Uploads are lost on redeploy | Move to Cloudinary/R2 (below) |
-
----
-
-## Uploads (optional but recommended)
-
-Avatars, resumes, and QR images are written to `server/public/uploads`, which
-is **ephemeral on Render** — they vanish on every deploy. For free durable
-storage, either:
-
-- **Cloudinary** — 25 GB free, no egress fees
-- **Cloudflare R2** — 10 GB free, zero egress
-
-Both need a small change in `server/src/services/upload.js` to swap the multer
-disk destination for their SDK. I can write that integration if you want it.
-
----
-
-## Verify the deployment
-
-```bash
-curl https://your-app.onrender.com/api/health
-# {"status":"ok","service":"CareerZen Backend API",...}
-```
-
-If that returns JSON, the backend is live and the SPA is being served from the
-same origin.
+The full production build should be verified locally before depending on Render
+for the first build.

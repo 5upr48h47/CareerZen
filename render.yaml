@@ -1,14 +1,4 @@
-# CareerZen — Render + external PostgreSQL deployment
-#
-# This Blueprint deploys ONE Render Web Service. The database is intentionally
-# NOT provisioned by Render: set DATABASE_URL to your external PostgreSQL
-# provider (for example Neon) in the Render dashboard.
-#
-# Flow:
-#   GitHub -> Render Web Service -> external PostgreSQL
-#
-# The Express server serves the Vite-built React SPA, so frontend and API use
-# one origin and one HTTPS URL.
+# CareerZen production deployment
 
 services:
   - type: web
@@ -16,7 +6,7 @@ services:
     runtime: node
     plan: free
     region: singapore
-    buildCommand: npm ci && npm run build
+    buildCommand: npm ci --include=dev && npm run build
     startCommand: npm start
     healthCheckPath: /api/health
     autoDeploy: true
@@ -24,7 +14,7 @@ services:
       - key: NODE_ENV
         value: production
       - key: NODE_VERSION
-        value: "20"
+        value: '20'
       - key: DATABASE_URL
         sync: false
       - key: JWT_SECRET
@@ -44,7 +34,6 @@ services:
       - key: GEMINI_API_KEY
         sync: false
       - key: SEED_DEMO
-        value: "false"
+        value: 'false'
 
-# No databases: block here. DATABASE_URL is supplied manually from the
-# external PostgreSQL provider so the database is independent of Render.
+# PostgreSQL is external. DATABASE_URL is supplied in Render environment variables.

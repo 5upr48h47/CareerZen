@@ -52,29 +52,10 @@ jobs:
 
       # Tests run against SQLite, matching local development. The suite starts
       # nothing itself — it drives a server you run locally before `npm test`.
-      - name: Generate Prisma Client
-        run: cd server && npx prisma generate
-        env:
-          DATABASE_URL: file:./test.db
-
-      - name: Start server
-        run: |
-          cd server
-          PORT=5099 NODE_ENV=test \
-            JWT_SECRET=test-secret-key-that-is-at-least-32-characters-long \
-            DATABASE_URL=file:./test.db \
-            LOG_LEVEL=warn \
-            node src/index.js &
-          # Poll the health endpoint rather than pulling in a wait-for dep.
-          for i in $(seq 1 60); do
-            if curl -sf http://localhost:5099/api/health > /dev/null; then
-              echo "Server ready after ${i}s"
-              exit 0
-            fi
-            sleep 1
-          done
-          echo "Server failed to become healthy"
-          exit 1
+      - name: Initialize test database
+  run: cd server && npx prisma db push --skip-generate
+  env:
+    DATABASE_URL: file:./test.db
 
       - name: Run API Tests
         run: cd server && npm test

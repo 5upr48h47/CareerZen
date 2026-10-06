@@ -3,7 +3,10 @@
   "version": "1.0.0",
   "description": "Next-Gen Career & Networking Platform for Early-Career Talent",
   "private": true,
-  "workspaces": ["server", "client"],
+  "workspaces": [
+    "server",
+    "client"
+  ],
   "scripts": {
     "install:all": "npm install",
     "dev": "node scripts/dev.js",
@@ -14,9 +17,16 @@
     "db:push": "npm --prefix server run db:push",
     "postgres:schema": "node server/scripts/use-postgres.mjs",
     "remove:demo-users": "node server/scripts/remove-demo-users.mjs",
-    "promote:admin": "node server/scripts/promote-admin.mjs"
+    "promote:admin": "node server/scripts/promote-admin.mjs",
+    "verify:deployment": "node scripts/verify-deployment.mjs"
   },
-  "keywords": ["career", "networking", "early-talent", "students", "jobs"],
+  "keywords": [
+    "career",
+    "networking",
+    "early-talent",
+    "students",
+    "jobs"
+  ],
   "author": "",
   "license": "ISC"
 }

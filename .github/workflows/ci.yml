@@ -50,12 +50,28 @@ jobs:
       - name: Install server dependencies
         run: cd server && npm ci --no-audit --no-fund
 
-      # Tests run against SQLite, matching local development. The suite starts
-      # nothing itself — it drives a server you run locally before `npm test`.
-      - name: Initialize test database
-  run: cd server && npx prisma db push --skip-generate
-  env:
-    DATABASE_URL: file:./test.db
+      - name: Initialize SQLite test database
+        run: cd server && npx prisma db push --skip-generate
+        env:
+          DATABASE_URL: file:./test.db
+
+      - name: Start server
+        run: |
+          cd server
+          PORT=5099 NODE_ENV=test \
+            JWT_SECRET=test-secret-key-that-is-at-least-32-characters-long \
+            DATABASE_URL=file:./test.db \
+            LOG_LEVEL=warn \
+            node src/index.js &
+          for i in $(seq 1 60); do
+            if curl -sf http://localhost:5099/api/health > /dev/null; then
+              echo "Server ready after ${i}s"
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "Server failed to become healthy"
+          exit 1
 
       - name: Run API Tests
         run: cd server && npm test
@@ -82,9 +98,6 @@ jobs:
       - name: Build Client
         run: cd client && npm run build
 
-  # Deployment is handled by render.yaml — Render watches the repo and deploys
-  # automatically on push. No deploy job is needed here; the gates above must
-  # pass first, which Render's own checks enforce.
   deploy-status:
     name: Deploy Readiness
     needs: [lint-and-typecheck, server-tests, client-build]
@@ -95,5 +108,5 @@ jobs:
         run: |
           echo "All checks passed on main."
           echo "Render auto-deploys on push if connected via render.yaml."
-          echo "Required production env vars: CORS_ORIGINS, CLIENT_URL,"
-          echo "RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET, GEMINI_API_KEY"
+          echo "Required production env vars: DATABASE_URL, CORS_ORIGINS, CLIENT_URL"
+          echo "Optional integrations: RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET, GEMINI_API_KEY"

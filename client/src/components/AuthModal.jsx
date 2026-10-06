@@ -36,8 +36,10 @@ function GoogleSignInButton({ onSuccess, label = 'Continue with Google' }) {
   const handleGoogleLogin = () => {
     setLoading(true);
 
-    // Check if GIS (Google Identity Services) is loaded
-    if (typeof window !== 'undefined' && window.google?.accounts?.id) {
+    // Check if GIS is loaded AND we have a real Client ID
+    const isPlaceholder = GOOGLE_CLIENT_ID.includes('YOUR_GOOGLE_CLIENT_ID');
+    
+    if (!isPlaceholder && typeof window !== 'undefined' && window.google?.accounts?.id) {
       window.google.accounts.id.initialize({
         client_id: GOOGLE_CLIENT_ID,
         origin: GOOGLE_ORIGIN,
@@ -61,7 +63,7 @@ function GoogleSignInButton({ onSuccess, label = 'Continue with Google' }) {
         }
       });
     } else {
-      // GIS not loaded — dev demo fallback with mock Google identity
+      // GIS not loaded OR placeholder client ID used — dev demo fallback with mock Google identity
       const mockGoogleUser = {
         googleId: `google_demo_${Date.now()}`,
         email: `googleuser${Date.now().toString().slice(-4)}@gmail.com`,

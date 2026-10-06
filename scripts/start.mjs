@@ -1,24 +1,17 @@
 // Cross-platform start entry point.
 //
-// Pushes the Prisma schema to the database (creating tables on a freshly
-// provisioned PostgreSQL database) and then starts the server. `prisma db
-// push` is idempotent — it reports "no changes" if the schema already
-// matches — so it is safe to run on every deploy.
+// Pushes the Prisma schema to an external PostgreSQL database and then starts
+// the server. `prisma db push` is idempotent and safe to run on deploy.
 //
-// DATABASE_URL is normally provided by the hosting platform (Render wires
-// it from the attached database). If it is missing or points at a
-// non-PostgreSQL URL (e.g. the local SQLite dev value), fail fast with a
-// clear message instead of attempting a push against a placeholder
-// localhost URL — a failed push against localhost just buries the real
-// problem (no database attached) under a misleading connection error.
+// DATABASE_URL must be supplied by the hosting platform. Fail fast when it is
+// missing or still points to the local SQLite development database.
 import { spawnSync } from 'node:child_process';
 
 const env = { ...process.env };
 if (!/^postgres(ql)?:\/\/.+/.test(env.DATABASE_URL || '')) {
   console.error(
-    '\n❌ DATABASE_URL is missing or not a PostgreSQL URL. Render wires it ' +
-    'from the attached database — attach the careerzen-db database to this ' +
-    'service and ensure DATABASE_URL is set as an env var.'
+    '\n❌ DATABASE_URL is missing or not a PostgreSQL URL. Set DATABASE_URL ' +
+    'to your external PostgreSQL connection string (for example Neon).'
   );
   process.exit(1);
 }
@@ -32,8 +25,11 @@ function run(label, cmd, args) {
   }
 }
 
-// 1. Create database tables from the PostgreSQL schema
-run('Pushing schema to database', 'npm', ['--prefix', 'server', 'run', 'db:postgres:push']);
+run('Pushing schema to external PostgreSQL database', 'npm', [
+  '--prefix',
+  'server',
+  'run',
+  'db:postgres:push',
+]);
 
-// 2. Start the server
 run('Starting server', 'node', ['server/src/index.js']);

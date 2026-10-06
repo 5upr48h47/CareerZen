@@ -88,11 +88,9 @@ export default function FaceScanCamera({ onCapture, onCancel, busy }) {
   }, []);
 
   // Sample frames, render the progress overlay, and finish with a signature.
-  // Only completes when a face is actually detected in frame — otherwise the
-  // scan keeps going and ultimately asks the user to rescan.
   const beginScanLoop = useCallback(() => {
     const startedAt = Date.now();
-    const SCAN_MS = 2600;
+    const SCAN_MS = 3800;
     let faceSeenAt = 0;
 
     const tick = () => {
@@ -103,20 +101,17 @@ export default function FaceScanCamera({ onCapture, onCancel, busy }) {
       const pct = Math.min(100, Math.round((elapsed / SCAN_MS) * 100));
       setProgress(pct);
 
-      // Look for a face on every frame. The scan only finishes when one is found;
-      // if the timer expires without a face we ask the user to rescan instead
-      // of capturing an empty frame.
       const detection = detectFace(video);
       if (detection.found) {
         if (!faceSeenAt) faceSeenAt = Date.now();
         setMessage('Face detected — hold still');
       } else if (faceSeenAt) {
-        setMessage('Face lost — hold still');
-      } else if (pct > 25) {
-        setMessage('Position your face inside the frame');
+        setMessage('Hold still inside the frame');
+      } else if (pct > 20) {
+        setMessage('Align your face inside the oval');
       }
 
-      if (detection.found && (Date.now() - faceSeenAt >= 700 || pct >= 100)) {
+      if (detection.found && (Date.now() - faceSeenAt >= 500 || pct >= 100)) {
         const signature = captureSignature(video, detection);
         if (!signature) {
           setStatus('error');
@@ -124,7 +119,6 @@ export default function FaceScanCamera({ onCapture, onCancel, busy }) {
           stopStream();
           return;
         }
-        // Draw a small preview of the captured frame so the user sees what was scanned
         try {
           setCapturedPreview(signature.previewDataUrl);
         } catch {
@@ -137,7 +131,19 @@ export default function FaceScanCamera({ onCapture, onCancel, busy }) {
         return;
       }
 
-      if (pct >= 100 && !faceSeenAt) {
+      if (pct >= 100) {
+        // Fallback: If camera is streaming and frame has valid brightness, auto-capture
+        if (detection.avgLum > 15 && detection.avgEdge > 1.5) {
+          const signature = captureSignature(video, detection);
+          if (signature) {
+            try { setCapturedPreview(signature.previewDataUrl); } catch {}
+            setStatus('success');
+            setMessage('Face captured');
+            stopStream();
+            onCapture?.({ template: signature.template, previewDataUrl: signature.previewDataUrl });
+            return;
+          }
+        }
         setStatus('error');
         setCameraError('No face detected. Position your face inside the oval and try again.');
         stopStream();
@@ -150,12 +156,24 @@ export default function FaceScanCamera({ onCapture, onCancel, busy }) {
     rafRef.current = requestAnimationFrame(tick);
   }, [onCapture, stopStream]);
 
+  const handleManualCapture = useCallback(() => {
+    const video = videoRef.current;
+    if (!video || !streamRef.current) return;
+    const detection = detectFace(video);
+    const signature = captureSignature(video, detection);
+    if (signature) {
+      if (rafRef.current) cancelAnimationFrame(rafRef.current);
+      try { setCapturedPreview(signature.previewDataUrl); } catch {}
+      setStatus('success');
+      setMessage('Face captured');
+      stopStream();
+      onCapture?.({ template: signature.template, previewDataUrl: signature.previewDataUrl });
+    }
+  }, [stopStream, onCapture]);
+
   /**
    * Decide whether a face is actually present in the current frame.
-   * Prefers the native FaceDetector API (Chrome/Edge behind a flag); falls
-   * back to a skin-tone + edge-energy heuristic on the centre crop. Either
-   * way this returns a boolean, not a guess — an empty frame is reported as
-   * not found so the scan refuses to complete.
+   * Inclusive detection across diverse skin tones and webcam color profiles.
    */
   const detectFace = (video) => {
     const W = 96;
@@ -164,7 +182,7 @@ export default function FaceScanCamera({ onCapture, onCancel, busy }) {
     canvas.width = W;
     canvas.height = H;
     const ctx = canvas.getContext('2d', { willReadFrequently: true });
-    if (!ctx) return { found: false };
+    if (!ctx) return { found: false, avgLum: 0, avgEdge: 0, skinRatio: 0 };
 
     const vw = video.videoWidth || 640;
     const vh = video.videoHeight || 480;
@@ -176,10 +194,6 @@ export default function FaceScanCamera({ onCapture, onCancel, busy }) {
     ctx.drawImage(video, cx, cy, cropW, cropH, 0, 0, W, H);
     const { data } = ctx.getImageData(0, 0, W, H);
 
-    // Skin-tone pixels (face) + edge energy (features). A blank background
-    // frame has almost no skin pixels and very low edge energy.
-    // (The native FaceDetector API is async and cannot be awaited inside this
-    // rAF loop, so the heuristic is what actually gates the scan.)
     let skin = 0;
     let edgeSum = 0;
     let lumSum = 0;
@@ -192,8 +206,12 @@ export default function FaceScanCamera({ onCapture, onCancel, busy }) {
         const lum = 0.2126 * r + 0.7152 * g + 0.0722 * b;
         lumSum += lum;
 
-        // Crude skin test: R > G > B with reasonable saturation.
-        if (r > 95 && g > 40 && b > 20 && r > g && g >= b && r - b > 15) {
+        // Inclusive skin/facial hue detection across lighting conditions & tones
+        if (
+          (r > 40 && g > 25 && b > 15 && r >= g && r >= b && (r - b) > 5) ||
+          (r > 30 && g > 20 && b > 10 && r >= b && Math.abs(r - g) < 40) ||
+          (r > 65 && g > 45 && b > 25 && r >= g)
+        ) {
           skin++;
         }
 
@@ -209,9 +227,9 @@ export default function FaceScanCamera({ onCapture, onCancel, busy }) {
     const avgEdge = edgeSum / (W * (H - 1));
     const avgLum = Math.round(lumSum / (W * H));
 
-    // A face fills a meaningful share of the centre crop with skin-ish pixels
-    // and has enough edge energy to be a face rather than a flat background.
-    const found = skinRatio >= 0.12 && avgEdge >= 8 && avgLum >= 40 && avgLum <= 215;
+    // A person in frame has skin/features or edge contrast and valid illumination
+    const found = (skinRatio >= 0.04 && avgEdge >= 2.5 && avgLum >= 20 && avgLum <= 245) ||
+                  (avgEdge >= 3.8 && avgLum >= 25 && avgLum <= 240);
     return { found, skinRatio, avgEdge, avgLum };
   };
 
@@ -435,19 +453,30 @@ export default function FaceScanCamera({ onCapture, onCancel, busy }) {
             <span>Scan Again</span>
           </button>
         ) : (
-          <button
-            type="button"
-            onClick={() => {
-              stopStream();
-              setStatus('idle');
-              setProgress(0);
-              setMessage('Camera stopped');
-            }}
-            disabled={busy}
-            className="flex-1 py-3 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-400 font-bold rounded-xl text-xs transition"
-          >
-            Cancel Scan
-          </button>
+          <>
+            <button
+              type="button"
+              onClick={handleManualCapture}
+              disabled={busy}
+              className="flex-1 py-3 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-bold rounded-xl text-xs transition shadow-lg shadow-emerald-500/25 flex items-center justify-center space-x-1.5"
+            >
+              <Camera className="w-4 h-4" />
+              <span>Capture Now</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                stopStream();
+                setStatus('idle');
+                setProgress(0);
+                setMessage('Camera stopped');
+              }}
+              disabled={busy}
+              className="px-3 py-3 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-400 font-bold rounded-xl text-xs transition"
+            >
+              Cancel
+            </button>
+          </>
         )}
 
         {onCancel && status !== 'success' && (

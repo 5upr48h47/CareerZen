@@ -1,12 +1,14 @@
-# CareerZen — Render deployment (free tier).
+# CareerZen — Render + external PostgreSQL deployment
 #
-# Setup:
-#   1. Push this repo to GitHub
-#   2. Render dashboard → New → Blueprint → point at the repo
-#   3. Render reads this file and provisions everything below
+# This Blueprint deploys ONE Render Web Service. The database is intentionally
+# NOT provisioned by Render: set DATABASE_URL to your external PostgreSQL
+# provider (for example Neon) in the Render dashboard.
 #
-# The web service builds the React app and serves it from Express, so the SPA
-# and the API share one origin — no CORS, no proxy, one TLS cert.
+# Flow:
+#   GitHub -> Render Web Service -> external PostgreSQL
+#
+# The Express server serves the Vite-built React SPA, so frontend and API use
+# one origin and one HTTPS URL.
 
 services:
   - type: web
@@ -14,70 +16,35 @@ services:
     runtime: node
     plan: free
     region: singapore
-    # The app is authored against SQLite (server/prisma/schema.prisma) but
-    # Render provisions PostgreSQL. scripts/build.mjs derives the postgres
-    # variant of the schema and generates a PostgreSQL Prisma Client, and
-    # scripts/start.mjs pushes the schema to the database before starting.
-    # Without the postgres switch the server starts with a SQLite engine
-    # against a Postgres URL and every query fails; without db push the
-    # database has no tables at all.
-    #
-    # package.json declares server and client as npm workspaces, so a single
-    # `npm ci` installs both from the committed root package-lock.json. The
-    # build and start scripts live at the root, so whatever buildCommand Render
-    # runs resolves to the same steps. The scripts are Node files (not inline
-    # shell) so the DATABASE_URL env var works on both Linux and Windows build
-    # containers.
-    #
-    # NOTE: the Render dashboard's buildCommand overrides this file. The dashboard
-# is set to `npm install && npm run build` and cannot be changed via the API
-# (the provided key is read-only on this service), so the repo is configured to
-# make `npm install` itself safe: a root `.npmrc` sets ignore-scripts=true.
-    #
-    # `npm install` (not `npm ci`): the free-tier build has a tight timeout and
-    # `npm install` without a lock file takes ~60s building the dependency tree
-    # from scratch. The committed root package-lock.json keeps it well under.
-    buildCommand: npm install && npm run build
+    buildCommand: npm ci && npm run build
     startCommand: npm start
     healthCheckPath: /api/health
-    # Free-tier services sleep after inactivity and are capped at 512 MB RAM.
     autoDeploy: true
     envVars:
       - key: NODE_ENV
         value: production
       - key: NODE_VERSION
         value: "20"
-      # Set these in the Render dashboard (marked sync:false so they are not
-      # committed to this file):
+      - key: DATABASE_URL
+        sync: false
       - key: JWT_SECRET
         generateValue: true
-      - key: DATABASE_URL
-        fromDatabase:
-          name: careerzen-db
-          property: connectionString
       - key: CORS_ORIGINS
         sync: false
       - key: CLIENT_URL
         sync: false
       - key: LOG_LEVEL
         value: warn
-      # Live Razorpay keys — real payments fail without these.
+      - key: DB_PROVIDER
+        value: postgresql
       - key: RAZORPAY_KEY_ID
         sync: false
       - key: RAZORPAY_KEY_SECRET
         sync: false
-      # Free Gemini key enables real LLM inference for the AI features.
       - key: GEMINI_API_KEY
         sync: false
-      # Keep the demo accounts (password123, includes a recruiter) out of prod.
       - key: SEED_DEMO
         value: "false"
 
-databases:
-  - name: careerzen-db
-    databaseName: careerzen
-    # Free PostgreSQL expires after 30 days on Render; the free Neon tier
-    # does not. Swap this block for a Neon connection string if you want the
-    # database to persist long-term.
-    plan: free
-    postgresMajorVersion: "16"
+# No databases: block here. DATABASE_URL is supplied manually from the
+# external PostgreSQL provider so the database is independent of Render.

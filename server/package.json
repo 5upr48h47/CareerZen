@@ -44,4 +44,9 @@
     "eslint": "^9.7.0",
     "prisma": "^5.15.0"
   }
+  "scripts": {
+  "start": "...",
+  "dev": "...",
+  "db:postgres:generate": "..."
+}
 }
